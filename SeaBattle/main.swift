@@ -102,37 +102,25 @@ class GameBoard {
         return true
     }
     
-
-    
     func imprintShip(col: Int, row: Int, size: Int, isHorisontal: Bool) -> Bool {
         // Разместить корабль в заданной координате
         if isFit(col: col, row: row, size: size, isHorisontal: isHorisontal) {
-            if isHorisontal {
-                for y in col - 1 ... col + size {
-                    for x in row - 1 ... row + 1 {
-                        board[y][x] = 128 // Рисуем сначала гало
-                    }
-                }
-                var deckNumber = 1
-                for y in col ... col + size - 1 {
-                    board[y][row] = size * 10 + deckNumber // А потом и сами палубы
-                    aliveDecks[Point2D(col: y, row: row)] = board[y][row]
-                    deckNumber += 1
-                }
-            } else {
-                for x in row - 1 ... row + size {
-                    for y in col - 1 ... col + 1 {
-                        board[y][x] = 128 // Рисуем сначала гало
-                    }
-                }
-                var deckNumber = 1
-                for x in row ... row + size - 1 {
-                    board[col][x] = 100 + size * 10 + deckNumber // А потом и сами палубы
-                    aliveDecks[Point2D(col: col, row: x)] = board[col][x] // Oh, shit!
+            let (startX, startY, isHorisontalDigit) = (col, row, isHorisontal ? 0 : 100)
+            let (endX, endY) = isHorisontal ? (startX + size - 1, startY) : (startX, startY + size - 1)
+            
+            for x in startX - 1 ... endX + 1 { // Рисуем сначала гало
+                for y in startY - 1 ... endY + 1 { board[x][y] = 128 }
+            }
+            
+            var deckNumber = 1
+            for x in startX ... endX { // А потом и сами палубы
+                for y in startY ... endY {
+                    board[x][y] = isHorisontalDigit + size * 10 + deckNumber
+                    aliveDecks[Point2D(col: x, row: y)] = board[x][y]
                     deckNumber += 1
                 }
             }
-        } else {return false}
+        } else { return false }
         
         return true
     }
