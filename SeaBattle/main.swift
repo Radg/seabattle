@@ -31,7 +31,7 @@ class GameBoard {
     // Игровое поле - матрица Int 12х12. Периметр - нулевые клетки.
     // 0 - клетка не занята
     // 64 - сюда стрелял враг                                       // 128 - гало
-    // 11 - 1я палуба 1-палубного горизонтального корабля           //
+    // 11 или -11 - 1я палуба 1-палубного корабля
     // 22 - 2я палуба 2-палубного горизонтального корабля           // 122 - 2я палуба 2-палубного вертикального корабля
     // 32 - 2я палуба 3-палубного горизонтального корабля           // 132 - 3я палуба 3-палубного вертикального корабля
     // 44 - 4я палуба 4-палубного горизонтального корабля           // 141 - 1я палуба 4-палубного вертикального корабля
@@ -84,36 +84,25 @@ class GameBoard {
             return false
         }
         
-        if isHorisontal {
-            for y in col ... col + size - 1 { // Палубы корабля должны попадать на пустые клетки (на 0)
-                if board[y][row] != 0 {
-                    return false
-                }
-                for y in col - 1 ... col + size { // А гало нового корабля может попадать ещё и на гало уже существующего
-                    for x in row - 1 ... row + 1 {
-                        if (board[y][x] != 0) && (board[y][x] != 128) {
-                            return false
-                        }
-                    }
-                }
+        let (startX, startY) = (col, row)
+        let (endX, endY) = isHorisontal ? (startX + size - 1, startY) : (startX, startY + size - 1)
+        
+        for x in startX ... endX { // Палубы корабля должны попадать на пустые клетки (на 0)
+            for y in startY ... endY {
+                if board[x][y] != 0 { return false }
             }
-        } else {
-            for x in row ... row + size - 1 {
-                if board[col][x] != 0 {
-                    return false
-                }
-            }
-            for x in row - 1 ... row + size {
-                for y in col - 1 ... col + 1 {
-                    if (board[y][x] != 0) && (board[y][x] != 128) {
-                        return false
-                    }
-                }
+        }
+        
+        for x in startX - 1 ... endX + 1 { // А гало нового корабля может попадать ещё и на гало уже существующего
+            for y in startY - 1 ... endY + 1 {
+                if (board[x][y] != 0) && (board[x][y] != 128) { return false }
             }
         }
         
         return true
     }
+    
+
     
     func imprintShip(col: Int, row: Int, size: Int, isHorisontal: Bool) -> Bool {
         // Разместить корабль в заданной координате
@@ -128,7 +117,6 @@ class GameBoard {
                 for y in col ... col + size - 1 {
                     board[y][row] = size * 10 + deckNumber // А потом и сами палубы
                     aliveDecks[Point2D(col: y, row: row)] = board[y][row]
-                    //                    aliveDecks[y] = [row: board[y][row]] // Oh, shit!
                     deckNumber += 1
                 }
             } else {
@@ -175,68 +163,9 @@ class GameBoard {
         case Unknown
     }
     
-    func hitOld(col: Int, row: Int) -> HitResult {
-        switch board[col][row] {
-        case 0, 128: // Мазила!
-            board[col][row] = 64
-            return .Miss
-        case 64, 256, -44 ... -11 :
-            return .AlreadyShooted
-        case 11, 21 ... 22, 31 ... 33, 41 ... 44: // Горизонтальный корабль
-            let deckIndex = board[col][row] % 10
-            let shipSize = (board[col][row] - deckIndex) / 10 // Mathematics, bitches!
-            let shipStart = col - deckIndex + 1
-            board[col][row] = -board[col][row] // Пробой палубы!
-            aliveDecks.removeValue(forKey: Point2D(col: col, row: row))
-            var isAlive = false
-            for i in shipStart ..< shipStart + shipSize { // Есть кто живой ещё?
-                if board[i][row] > 0 {
-                    isAlive = true
-                    return .Wound
-                }
-            }
-            if !isAlive {
-                for y in shipStart - 1 ... shipStart + shipSize {
-                    for x in row - 1 ... row + 1 {
-                        board[y][x] = 64 // Рисуем печальное гало
-                    }
-                }
-                for i in shipStart ..< shipStart + shipSize {
-                    board[i][row] = -255 // R.I.P. Titanic
-                }
-                return .Dead
-            }
-            
-        case 111, 121 ... 122, 131 ... 133, 141 ... 144: // Вертикальный корабль
-            let deckIndex = board[col][row] % 10
-            let shipSize = ((board[col][row] - (board[col][row] - (board[col][row] % 100))) - (board[col][row] - (board[col][row] - (board[col][row] % 100))) % 10) / 10 // Mathematics, bitches!
-            let shipStart = row - deckIndex + 1
-            board[col][row] = -board[col][row] // Пробой палубы!
-            aliveDecks.removeValue(forKey: Point2D(col: col, row: row))
-            var isAlive = false
-            for i in shipStart ..< shipStart + shipSize { // Есть кто живой ещё?
-                if board[col][i] > 0 {
-                    isAlive = true
-                    return .Wound
-                }
-            }
-            if !isAlive {
-                for x in shipStart - 1 ... shipStart + shipSize {
-                    for y in col - 1 ... col + 1 {
-                        board[y][x] = 64 // Рисуем печальное гало
-                    }
-                }
-                for i in shipStart ..< shipStart + shipSize {
-                    board[col][i] = -255 // R.I.P. Titanic
-                }
-            }
-        default:
-            return .Unknown
-        }
-        return .Unknown
-    }
-    
-    func hit(col: Int, row: Int) -> HitResult {
+    func hit(point: Point2D) -> HitResult {
+        let col = point.col
+        let row = point.row
         switch board[col][row] {
         case 0, 128: // Мазила!
             board[col][row] = 64
@@ -301,15 +230,24 @@ var brd = GameBoard()
 brd.generateShips()
 print(brd.getAsString())
 
-//let randomPoint = brd.getRandomAliveDeck()
-//brd.hitNew(col: randomPoint.col, row: randomPoint.row)
-
-while brd.aliveDecks.count > 0 { // Убить все сгенерированные корабли методом рандомной стрельбы по известным палубам из словаря
-    let randomPoint = brd.getRandomAliveDeck()
-    print(randomPoint.col, randomPoint.row, brd.hit(col: randomPoint.col, row: randomPoint.row))
+while brd.aliveDecks.count > 0 {
+    let randomPoint = Point2D(col: Int.random(in: 1 ... 10), row: Int.random(in: 1 ... 10))
+    brd.hit(point: randomPoint)
 }
 
 print(brd.getAsString())
+
+//let randomPoint = brd.getRandomAliveDeck()
+//brd.hitNew(col: randomPoint.col, row: randomPoint.row)
+
+//while brd.aliveDecks.count > 0 { // Убить все сгенерированные корабли методом рандомной стрельбы по известным палубам из словаря
+//    let randomPoint = brd.getRandomAliveDeck()
+//    print(randomPoint.col, randomPoint.row, brd.hit(col: randomPoint.col, row: randomPoint.row))
+//}
+//
+
+
+
 //for (point, value) in brd.aliveDecks {
 //    print("Column: \(point.col), Row: \(point.row), Value: \(value)")
 //}
