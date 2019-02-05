@@ -271,8 +271,8 @@ enum CycleStatus {
 }
 
 var cycleStatus = CycleStatus.NewShot
-var pointsCloud = [Point2D]()       // Массив прилежащих (к раненой) клеток куда мы планируем далее стрелять, не более 4х элементов
-var woundCloud = [Point2D]()        // Массив стреляных точек
+var targetPoints = [Point2D]()       // Массив прилежащих (к раненой) клеток куда мы планируем далее стрелять, не более 4х элементов
+var woundBoards = [Point2D]()        // Массив стреляных точек
 
 print(player2.boardOwn.getAsString())
 
@@ -280,64 +280,63 @@ while player2.boardOwn.aliveDecks.count > 0 {
     
     var hitPoint = Point2D()
     
-    switch pointsCloud.count {
+    switch targetPoints.count {
     case 0:
         cycleStatus = .NewShot
         hitPoint = player1.boardForeign.getRandomUnknownCell()
     case 1:
         cycleStatus = .Finish
-        hitPoint = pointsCloud[0]
-    case 2 where (pointsCloud[0].col == pointsCloud[1].col || pointsCloud[0].row == pointsCloud[1].row): // 2 точки имеют общую X или Y координату, т.е. ориентация корабля известна, но неизвестно направление добивания
+        hitPoint = targetPoints[0]
+    case 2 where (targetPoints[0].col == targetPoints[1].col || targetPoints[0].row == targetPoints[1].row): // 2 точки имеют общую X или Y координату, т.е. ориентация корабля известна
         cycleStatus = .FinishNoDirection
-        hitPoint = pointsCloud.randomElement()!
+        hitPoint = targetPoints.randomElement()!
     default:
         cycleStatus = .FinishNoOrientNoDirection
-        hitPoint = pointsCloud.randomElement()!
+        hitPoint = targetPoints.randomElement()!
     }
     
     let hitResult = player2.boardOwn.hit(point: hitPoint, playerEnemy: player1)
     switch hitResult { // Стреляем и анализируем результат
     case .Miss where (cycleStatus == .FinishNoOrientNoDirection) || (cycleStatus == .FinishNoDirection): // На предыдущем цикле попали, в этом - промахнулись. Нужно убрать стреляную точку из массива прилежащих:
-        if let index = pointsCloud.index(of: hitPoint) { pointsCloud.remove(at: index) } else { print("Ошибка удаления точки из массива прилежащих") }
+        if let index = targetPoints.index(of: hitPoint) { targetPoints.remove(at: index) } else { print("Ошибка удаления точки из массива прилежащих") }
     case .Wound where cycleStatus == .NewShot:
-        woundCloud.append(hitPoint)
+        woundBoards.append(hitPoint)
         // Тут нужно формировать массив точек, по которым стрелять в следующих итерациях, исключая стрелянные / дохлые и т.п. Массив формируется из доски player1.boardForeign
-        if hitPoint.col - 1 > 0  && (player1.boardForeign.board[hitPoint.col - 1][hitPoint.row] == 0) { pointsCloud.append(Point2D(col: hitPoint.col - 1, row: hitPoint.row)) } // Добавляем левую точку
-        if hitPoint.col + 1 < 11 && (player1.boardForeign.board[hitPoint.col + 1][hitPoint.row] == 0) { pointsCloud.append(Point2D(col: hitPoint.col + 1, row: hitPoint.row)) } // Добавляем правую точку
-        if hitPoint.row - 1 > 0  && (player1.boardForeign.board[hitPoint.col][hitPoint.row - 1] == 0) { pointsCloud.append(Point2D(col: hitPoint.col, row: hitPoint.row - 1)) } // Добавляем верхнюю точку
-        if hitPoint.row + 1 > 0  && (player1.boardForeign.board[hitPoint.col][hitPoint.row + 1] == 0) { pointsCloud.append(Point2D(col: hitPoint.col, row: hitPoint.row + 1)) } // Добавляем нижнюю точку
-        // 2. Это повторное попадание, но мы не знаем ни ориентации, ни направления ()
+        if hitPoint.col - 1 > 0  && (player1.boardForeign.board[hitPoint.col - 1][hitPoint.row] == 0) { targetPoints.append(Point2D(col: hitPoint.col - 1, row: hitPoint.row)) } // Добавляем левую точку
+        if hitPoint.col + 1 < 11 && (player1.boardForeign.board[hitPoint.col + 1][hitPoint.row] == 0) { targetPoints.append(Point2D(col: hitPoint.col + 1, row: hitPoint.row)) } // Добавляем правую точку
+        if hitPoint.row - 1 > 0  && (player1.boardForeign.board[hitPoint.col][hitPoint.row - 1] == 0) { targetPoints.append(Point2D(col: hitPoint.col, row: hitPoint.row - 1)) } // Добавляем верхнюю точку
+        if hitPoint.row + 1 > 0  && (player1.boardForeign.board[hitPoint.col][hitPoint.row + 1] == 0) { targetPoints.append(Point2D(col: hitPoint.col, row: hitPoint.row + 1)) } // Добавляем нижнюю точку
     case .Wound where cycleStatus == .FinishNoOrientNoDirection || cycleStatus == .FinishNoDirection:
-        woundCloud.append(hitPoint)
-        pointsCloud.removeAll()
-        if woundCloud.first?.col == woundCloud.last?.col {  // Корабль вертикальный
+        woundBoards.append(hitPoint)
+        targetPoints.removeAll()
+        if woundBoards.first?.col == woundBoards.last?.col {  // Корабль вертикальный
             // Нужно взять минимальный по row и от него -1
-            let minRow = woundCloud.sorted(by: {$0.row < $1.row})[0].row
-            if player1.boardForeign.board[woundCloud.first!.col][minRow - 1] == 0 {pointsCloud.append(Point2D(col: woundCloud.first!.col, row: minRow - 1))}
+            let minRow = woundBoards.sorted(by: {$0.row < $1.row})[0].row
+            if player1.boardForeign.board[woundBoards.first!.col][minRow - 1] == 0 {targetPoints.append(Point2D(col: woundBoards.first!.col, row: minRow - 1))}
             // Нужно взять максимальный по row и от него +1
-            let maxRow = woundCloud.sorted(by: {$0.row > $1.row})[0].row
-            if player1.boardForeign.board[woundCloud.first!.col][maxRow + 1] == 0 {pointsCloud.append(Point2D(col: woundCloud.first!.col, row: maxRow + 1))}
+            let maxRow = woundBoards.sorted(by: {$0.row > $1.row})[0].row
+            if player1.boardForeign.board[woundBoards.first!.col][maxRow + 1] == 0 {targetPoints.append(Point2D(col: woundBoards.first!.col, row: maxRow + 1))}
         } else {                                            // Корабль горизонтальный
             // Нужно взять минимальный по col и от него -1
-            let minCol = woundCloud.sorted(by: {$0.col < $1.col})[0].col
-            if player1.boardForeign.board[minCol - 1][woundCloud.first!.row] == 0 {pointsCloud.append(Point2D(col: minCol - 1, row: woundCloud.first!.row))}
+            let minCol = woundBoards.sorted(by: {$0.col < $1.col})[0].col
+            if player1.boardForeign.board[minCol - 1][woundBoards.first!.row] == 0 {targetPoints.append(Point2D(col: minCol - 1, row: woundBoards.first!.row))}
             // Нужно взять максимальный по col и от него +1
-            let maxCol = woundCloud.sorted(by: {$0.col > $1.col})[0].col
-            if player1.boardForeign.board[maxCol + 1][woundCloud.first!.row] == 0 {pointsCloud.append(Point2D(col: maxCol + 1, row: woundCloud.first!.row))}
+            let maxCol = woundBoards.sorted(by: {$0.col > $1.col})[0].col
+            if player1.boardForeign.board[maxCol + 1][woundBoards.first!.row] == 0 {targetPoints.append(Point2D(col: maxCol + 1, row: woundBoards.first!.row))}
         }
     case .Wound where cycleStatus == .Finish:
         // 1. добавить следующую точку по направлению выстрела:
-        if woundCloud.last?.col == hitPoint.col { // Корабль вертикально
-            pointsCloud.append(Point2D(col: hitPoint.col, row: hitPoint.row + hitPoint.row - woundCloud.last!.row))
+        if woundBoards.last?.col == hitPoint.col { // Корабль вертикально
+            targetPoints.append(Point2D(col: hitPoint.col, row: hitPoint.row + hitPoint.row - woundBoards.last!.row))
         } else { // Корабль горизонтально
-            pointsCloud.append(Point2D(col: hitPoint.col + hitPoint.col - woundCloud.last!.col, row: hitPoint.row))
+            targetPoints.append(Point2D(col: hitPoint.col + hitPoint.col - woundBoards.last!.col, row: hitPoint.row))
         }
-        woundCloud.append(hitPoint)
+        woundBoards.append(hitPoint)
         // 2. убрать стреляную точку из массива прилежащих
-        if let index = pointsCloud.index(of: hitPoint) { pointsCloud.remove(at: index) } else { print("Ошибка удаления точки из массива прилежащих") }
+        if let index = targetPoints.index(of: hitPoint) { targetPoints.remove(at: index) } else { print("Ошибка удаления точки из массива прилежащих") }
     case .Dead:
-        pointsCloud.removeAll()
-        woundCloud.removeAll()
+        targetPoints.removeAll()
+        woundBoards.removeAll()
     case .AlreadyShooted, .Unknown:
         print("Ошибка при стрельбе в игрока \(player2.name) в позицию \(hitPoint)")
         break
