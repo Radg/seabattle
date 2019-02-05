@@ -28,9 +28,17 @@ class GameBoard {
     let columns: [Character:Int] = ["А": 1, "Б": 2, "В": 3, "Г": 4, "Д": 5, "Е": 6, "Ж": 7, "З": 8, "И": 9, "К": 10]
     let maxShipSize = 4
     
+    enum HitResult {
+        case Miss
+        case Wound
+        case Dead
+        case AlreadyShooted
+        case Unknown
+    }
+    
     // Игровое поле - матрица Int 12х12. Периметр - нулевые клетки.
     // 0 - клетка не занята
-    // 64 - сюда стрелял враг                                       // 128 - гало
+    // -64 - сюда стрелял враг                                       // 128 - гало
     // 11 или -11 - 1я палуба 1-палубного корабля
     // 22 - 2я палуба 2-палубного горизонтального корабля           // 122 - 2я палуба 2-палубного вертикального корабля
     // 32 - 2я палуба 3-палубного горизонтального корабля           // 132 - 3я палуба 3-палубного вертикального корабля
@@ -40,8 +48,6 @@ class GameBoard {
     
     var board = Array(repeating: Array(repeating: 0, count: 12), count: 12) // Игровая доска 12х12, эффективный размер 10х10 в центре
     
-    var aliveDecks = [Point2D : Int]() // Сюда будут складываться координаты сгенерированных палуб в качестве ключей и
-
     init() {
     }
     
@@ -64,7 +70,7 @@ class GameBoard {
                     line += "Q"
                 case -44 ... -41, -33 ... -31, -22 ... -21, -11, -111, -122 ... -121, -133 ... -131, -144 ... -141:
                     line += "X"
-                case 64:
+                case -64:
                     line += "."
                 case -255:
                     line += "+"
@@ -77,6 +83,28 @@ class GameBoard {
         
         return line
     }
+    
+    subscript(column: Character, row: Int) -> Int? {
+        get {
+            if let col = columns[column] {
+                return board[col][row]
+            } else {
+                return nil
+            }
+        }
+        set {
+            if columnNames.contains(column) {
+                if let col = columns[column] {
+                    board[col][row] = newValue!
+                }
+            }
+        }
+    }
+}
+
+class OwnBoard: GameBoard {
+
+    var aliveDecks = [Point2D : Int]() // Сюда будут складываться координаты сгенерированных палуб в качестве ключей и
     
     func isFit(col: Int, row: Int, size: Int, isHorisontal: Bool) -> Bool {
         // Влезет ли корабль в заданную координату
@@ -143,87 +171,199 @@ class GameBoard {
         }
     }
     
-    enum HitResult {
-        case Miss
-        case Wound
-        case Dead
-        case AlreadyShooted
-        case Unknown
-    }
-    
-    func hit(point: Point2D) -> HitResult {
-        let col = point.col
-        let row = point.row
+    func hit(point: Point2D, playerEnemy: Player) -> HitResult {
+        let (col, row) = (point.col, point.row)
         switch board[col][row] {
         case 0, 128: // Мазила!
-            board[col][row] = 64
+            board[col][row] = -64
+            playerEnemy.boardForeign.board[col][row] = -64
+            playerEnemy.boardForeign.unknownCells.removeValue(forKey: point)
             return .Miss
-        case 64, 256, -44 ... -11 :
+        case -64, 256, -44 ... -11 :
             return .AlreadyShooted
         case 11, 21 ... 22, 31 ... 33, 41 ... 44, 111, 121 ... 122, 131 ... 133, 141 ... 144:
             let deckIndex = board[col][row] % 10
             let shipSize = board[col][row] < 100 ? (board[col][row] - deckIndex) / 10 : ((board[col][row] - (board[col][row] - (board[col][row] % 100))) - (board[col][row] - (board[col][row] - (board[col][row] % 100))) % 10) / 10 // Math, bitches!
             let (shipStartX, shipStartY) = board[col][row] < 100 ? ((col - deckIndex + 1), row) : (col, (row - deckIndex + 1))
             let (endX, endY) = board[col][row] < 100 ? (shipStartX + shipSize - 1, shipStartY) : (shipStartX, shipStartY + shipSize - 1)
-
+            
             board[col][row] = -board[col][row] // Пробой палубы!
             aliveDecks.removeValue(forKey: Point2D(col: col, row: row)) // Убираем эту палубу из словаря живых
-
+            
+            playerEnemy.boardForeign.board[col][row] = -playerEnemy.boardForeign.board[col][row] // Зеркалируем пробой на чужой карте противоположного игрока
+            playerEnemy.boardForeign.unknownCells.removeValue(forKey: point) // И убираем эту клетку из словаря свободных клеток чужой карты противоположного игрока
+            
             for x in shipStartX ... endX { // Ищем живые палубы
                 for y in shipStartY ... endY {
-                    if board[x][y] > 0 {
-                        return .Wound
-                    }
+                    if board[x][y] > 0 { return .Wound }
                 }
             }
             
+            // Если мы тут - кораблю пиздарики
             for x in shipStartX - 1 ... endX + 1 { // Рисуем печальное гало
                 for y in shipStartY - 1 ... endY + 1 {
-                    board[x][y] = 64
+                    board[x][y] = -64
+                    playerEnemy.boardForeign.board[x][y] = -64 // Зеркалируем пробой на чужой карте противоположного игрока
+                    playerEnemy.boardForeign.unknownCells.removeValue(forKey: Point2D(col: x, row: y)) // И убираем эту клетку из словаря неизвестных клеток чужой карты противоположного игрока
                 }
             }
             
             for x in shipStartX ... endX { // R.I.P. Titanic
                 for y in shipStartY ... endY {
                     board[x][y] = -255
+                    playerEnemy.boardForeign.board[x][y] = -255
                 }
             }
-            
             return .Dead
         default:
             return .Unknown
         }
     }
+
+}
+
+class ForeignBoard: GameBoard {
     
-    subscript(column: Character, row: Int) -> Int? {
-        get {
-            if let col = columns[column] {
-                return board[col][row]
-            } else {
-                return nil
-            }
-        }
-        set {
-            if columnNames.contains(column) {
-                if let col = columns[column] {
-                    board[col][row] = newValue!
-                }
+    var unknownCells = [Point2D : Int]() // Сюда будут складываться координаты клеток с неизвестным статусом (потенциальные цели для стрельбы)
+    
+    override init() {
+        super.init()
+        
+        for x in 1 ... boardSize { // Заполнение словаря с неизвестными клетками
+            for y in 1 ... boardSize {
+                unknownCells[Point2D(col: x, row: y)] = 0
             }
         }
     }
+    
+    func getRandomUnknownCell() -> Point2D {
+        var randomPoint = Point2D()
+        (randomPoint, _) = unknownCells.randomElement()!
+        return randomPoint
+    }
+    
 }
 
-var brd = GameBoard()
-
-brd.generateShips()
-print(brd.getAsString())
-
-while brd.aliveDecks.count > 0 {
-    let randomPoint = Point2D(col: Int.random(in: 1 ... 10), row: Int.random(in: 1 ... 10))
-    brd.hit(point: randomPoint)
+class Player {
+    var name: String
+    var boardOwn: OwnBoard
+    var boardForeign: ForeignBoard
+    
+    init(name: String) {
+        self.name = name
+        self.boardOwn = OwnBoard()
+        boardOwn.generateShips()
+        boardForeign = ForeignBoard()
+    }
 }
 
-print(brd.getAsString())
+// Тело программы
+
+let (player1, player2) = (Player(name: "Player1"), Player(name: "Player2"))
+var finishShip1 = false
+// Сначала надо написать процедуру атаки игрока player1 на player2, без переключения хода
+
+enum CycleStatus {
+    case NewShot                    // Совершаем новый выстрел
+    case FinishNoOrientNoDirection  // Добиваем, но не знаем ни ориентации, ни направления добивания
+    case FinishNoDirection          // Добиваем, знаем ориентацию корабля, не знаем направления добивания
+    case Finish                     // Добиваем, знаем ориентацию корабля и направление добивания
+}
+
+var cycleStatus = CycleStatus.NewShot
+var pointsCloud = [Point2D]()       // Массив прилежащих (к раненой) клеток куда мы планируем далее стрелять, не более 4х элементов
+var woundCloud = [Point2D]()        // Массив стреляных точек
+
+print(player2.boardOwn.getAsString())
+
+while player2.boardOwn.aliveDecks.count > 0 {
+    
+    var hitPoint = Point2D()
+    
+    switch pointsCloud.count {
+    case 0:
+        cycleStatus = .NewShot
+        hitPoint = player1.boardForeign.getRandomUnknownCell()
+    case 1:
+        cycleStatus = .Finish
+        hitPoint = pointsCloud[0]
+    case 2 where (pointsCloud[0].col == pointsCloud[1].col || pointsCloud[0].row == pointsCloud[1].row): // 2 точки имеют общую X или Y координату, т.е. ориентация корабля известна, но неизвестно направление добивания
+        cycleStatus = .FinishNoDirection
+        hitPoint = pointsCloud.randomElement()!
+    default:
+        cycleStatus = .FinishNoOrientNoDirection
+        hitPoint = pointsCloud.randomElement()!
+    }
+    
+    let hitResult = player2.boardOwn.hit(point: hitPoint, playerEnemy: player1)
+    switch hitResult { // Стреляем и анализируем результат
+    case .Miss where (cycleStatus == .FinishNoOrientNoDirection) || (cycleStatus == .FinishNoDirection): // На предыдущем цикле попали, в этом - промахнулись. Нужно убрать стреляную точку из массива прилежащих:
+        if let index = pointsCloud.index(of: hitPoint) { pointsCloud.remove(at: index) } else { print("Ошибка удаления точки из массива прилежащих") }
+    case .Wound where cycleStatus == .NewShot:
+        woundCloud.append(hitPoint)
+        // Тут нужно формировать массив точек, по которым стрелять в следующих итерациях, исключая стрелянные / дохлые и т.п. Массив формируется из доски player1.boardForeign
+        if hitPoint.col - 1 > 0  && (player1.boardForeign.board[hitPoint.col - 1][hitPoint.row] == 0) { pointsCloud.append(Point2D(col: hitPoint.col - 1, row: hitPoint.row)) } // Добавляем левую точку
+        if hitPoint.col + 1 < 11 && (player1.boardForeign.board[hitPoint.col + 1][hitPoint.row] == 0) { pointsCloud.append(Point2D(col: hitPoint.col + 1, row: hitPoint.row)) } // Добавляем правую точку
+        if hitPoint.row - 1 > 0  && (player1.boardForeign.board[hitPoint.col][hitPoint.row - 1] == 0) { pointsCloud.append(Point2D(col: hitPoint.col, row: hitPoint.row - 1)) } // Добавляем верхнюю точку
+        if hitPoint.row + 1 > 0  && (player1.boardForeign.board[hitPoint.col][hitPoint.row + 1] == 0) { pointsCloud.append(Point2D(col: hitPoint.col, row: hitPoint.row + 1)) } // Добавляем нижнюю точку
+        // 2. Это повторное попадание, но мы не знаем ни ориентации, ни направления ()
+    case .Wound where cycleStatus == .FinishNoOrientNoDirection || cycleStatus == .FinishNoDirection:
+        woundCloud.append(hitPoint)
+        pointsCloud.removeAll()
+        if woundCloud.first?.col == woundCloud.last?.col {  // Корабль вертикальный
+            // Нужно взять минимальный по row и от него -1
+            let minRow = woundCloud.sorted(by: {$0.row < $1.row})[0].row
+            if player1.boardForeign.board[woundCloud.first!.col][minRow - 1] == 0 {pointsCloud.append(Point2D(col: woundCloud.first!.col, row: minRow - 1))}
+            // Нужно взять максимальный по row и от него +1
+            let maxRow = woundCloud.sorted(by: {$0.row > $1.row})[0].row
+            if player1.boardForeign.board[woundCloud.first!.col][maxRow + 1] == 0 {pointsCloud.append(Point2D(col: woundCloud.first!.col, row: maxRow + 1))}
+        } else {                                            // Корабль горизонтальный
+            // Нужно взять минимальный по col и от него -1
+            let minCol = woundCloud.sorted(by: {$0.col < $1.col})[0].col
+            if player1.boardForeign.board[minCol - 1][woundCloud.first!.row] == 0 {pointsCloud.append(Point2D(col: minCol - 1, row: woundCloud.first!.row))}
+            // Нужно взять максимальный по col и от него +1
+            let maxCol = woundCloud.sorted(by: {$0.col > $1.col})[0].col
+            if player1.boardForeign.board[maxCol + 1][woundCloud.first!.row] == 0 {pointsCloud.append(Point2D(col: maxCol + 1, row: woundCloud.first!.row))}
+        }
+    case .Wound where cycleStatus == .Finish:
+        // 1. добавить следующую точку по направлению выстрела:
+        if woundCloud.last?.col == hitPoint.col { // Корабль вертикально
+            pointsCloud.append(Point2D(col: hitPoint.col, row: hitPoint.row + hitPoint.row - woundCloud.last!.row))
+        } else { // Корабль горизонтально
+            pointsCloud.append(Point2D(col: hitPoint.col + hitPoint.col - woundCloud.last!.col, row: hitPoint.row))
+        }
+        woundCloud.append(hitPoint)
+        // 2. убрать стреляную точку из массива прилежащих
+        if let index = pointsCloud.index(of: hitPoint) { pointsCloud.remove(at: index) } else { print("Ошибка удаления точки из массива прилежащих") }
+    case .Dead:
+        pointsCloud.removeAll()
+        woundCloud.removeAll()
+    case .AlreadyShooted, .Unknown:
+        print("Ошибка при стрельбе в игрока \(player2.name) в позицию \(hitPoint)")
+        break
+    default:
+        break
+    }
+}
+
+print(player2.boardOwn.getAsString())
+
+
+
+
+//brd.generateShips()
+//print(brd.getAsString())
+//
+//while brd.aliveDecks.count > 0 { // Убить все сгенерированные корабли методом рандомной стрельбы по известным палубам из словаря
+//    brd.hit(point: brd.getRandomAliveDeck())
+//}
+//
+//print(brd.getAsString())
+
+//while brd.aliveDecks.count > 0 { // Стрелять случайно по всем клеткам подряд
+//    let randomPoint = Point2D(col: Int.random(in: 1 ... 10), row: Int.random(in: 1 ... 10))
+//    brd.hit(point: randomPoint)
+//}
 
 //let randomPoint = brd.getRandomAliveDeck()
 //brd.hitNew(col: randomPoint.col, row: randomPoint.row)
