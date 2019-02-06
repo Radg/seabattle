@@ -326,7 +326,7 @@ while player2.boardOwn.aliveDecks.count > 0 && iterations <= 100 {
     case .Wound where cycleStatus == .Finish:
         woundBoards.append(hitPoint)
         // 1. добавить следующую точку по направлению выстрела:
-        if woundBoards.last?.col == hitPoint.col {          // Корабль вертикально
+        if woundBoards.first?.col == hitPoint.col {          // Корабль вертикально
             let minRow = woundBoards.sorted(by: {$0.row < $1.row})[0].row
             let maxRow = woundBoards.sorted(by: {$0.row > $1.row})[0].row
             if minRow - 1 >  0 && player1.boardForeign.board[hitPoint.col][minRow - 1] == 0 { targetPoints.append(Point2D(col: hitPoint.col, row: minRow - 1)) }
