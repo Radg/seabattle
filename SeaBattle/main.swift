@@ -260,13 +260,12 @@ class Player {
 // Тело программы
 
 let (player1, player2) = (Player(name: "Player1"), Player(name: "Player2"))
-var finishShip1 = false
 // Сначала надо написать процедуру атаки игрока player1 на player2, без переключения хода
 
-enum CycleStatus {
+enum CycleStatus {                  // Тип итерации:
     case NewShot                    // Совершаем новый выстрел
-    case FinishNoOrientation        // Добиваем, но не знаем ни ориентации, ни направления добивания
-    case Finish                     // Добиваем, знаем ориентацию корабля и направление добивания
+    case FinishNoOrientation        // Добиваем, но не знаем ориентации корабля
+    case Finish                     // Добиваем, зная ориентацию корабля
 }
 
 var cycleStatus = CycleStatus.NewShot
@@ -276,13 +275,11 @@ var iterations: Int = 0
 
 print(player2.boardOwn.getAsString())
 
-while player2.boardOwn.aliveDecks.count > 0 && iterations <= 100 {
-    
-    iterations += 1
+while player2.boardOwn.aliveDecks.count > 0 {
     
     var hitPoint = Point2D()
     
-    switch targetPoints.count {
+    switch targetPoints.count { // Устанавливаем cycleStatus в зависимости от кол-ва элементов массива targetPoints
     case 0:
         cycleStatus = .NewShot
         hitPoint = player1.boardForeign.getRandomUnknownCell()
@@ -308,10 +305,10 @@ while player2.boardOwn.aliveDecks.count > 0 && iterations <= 100 {
     case .Wound where cycleStatus == .FinishNoOrientation:
         woundBoards.append(hitPoint)
         targetPoints.removeAll()
-        let minRow = woundBoards.sorted(by: {$0.row < $1.row})[0].row // < 1 ? 1 : woundBoards.sorted(by: {$0.row < $1.row})[0].row
-        let maxRow = woundBoards.sorted(by: {$0.row > $1.row})[0].row // > 10 ? 10 : woundBoards.sorted(by: {$0.row > $1.row})[0].row
-        let minCol = woundBoards.sorted(by: {$0.col < $1.col})[0].col // < 1 ? 1 : woundBoards.sorted(by: {$0.col < $1.col})[0].col
-        let maxCol = woundBoards.sorted(by: {$0.col > $1.col})[0].col // > 10 ? 10 : woundBoards.sorted(by: {$0.col > $1.col})[0].col
+        let minRow = woundBoards.sorted(by: {$0.row < $1.row})[0].row
+        let maxRow = woundBoards.sorted(by: {$0.row > $1.row})[0].row
+        let minCol = woundBoards.sorted(by: {$0.col < $1.col})[0].col
+        let maxCol = woundBoards.sorted(by: {$0.col > $1.col})[0].col
         if minCol == maxCol {                               // Корабль вертикальный
             // Нужно взять минимальный по row и от него -1
             if player1.boardForeign.board[woundBoards.first!.col][minRow - 1] == 0 { targetPoints.append(Point2D(col: woundBoards.first!.col, row: minRow - 1)) }
@@ -331,13 +328,11 @@ while player2.boardOwn.aliveDecks.count > 0 && iterations <= 100 {
             let maxRow = woundBoards.sorted(by: {$0.row > $1.row})[0].row
             if minRow - 1 >  0 && player1.boardForeign.board[hitPoint.col][minRow - 1] == 0 { targetPoints.append(Point2D(col: hitPoint.col, row: minRow - 1)) }
             if maxRow + 1 < 11 && player1.boardForeign.board[hitPoint.col][maxRow + 1] == 0 { targetPoints.append(Point2D(col: hitPoint.col, row: maxRow + 1)) }
-//            targetPoints.append(Point2D(col: hitPoint.col, row: hitPoint.row + hitPoint.row - woundBoards.last!.row))
         } else {                                            // Корабль горизонтально
             let minCol = woundBoards.sorted(by: {$0.col < $1.col})[0].col
             let maxCol = woundBoards.sorted(by: {$0.col > $1.col})[0].col
             if minCol - 1 >  0 && player1.boardForeign.board[minCol - 1][hitPoint.row] == 0 { targetPoints.append(Point2D(col: minCol - 1, row: hitPoint.row)) }
             if maxCol + 1 < 11 && player1.boardForeign.board[maxCol + 1][hitPoint.row] == 0 { targetPoints.append(Point2D(col: maxCol + 1, row: hitPoint.row)) }
-//            targetPoints.append(Point2D(col: hitPoint.col + hitPoint.col - woundBoards.last!.col, row: hitPoint.row))
         }
         // 2. убрать стреляную точку из массива прилежащих
         if let index = targetPoints.index(of: hitPoint) { targetPoints.remove(at: index) } else { print("Ошибка удаления точки из массива прилежащих") }
@@ -350,14 +345,13 @@ while player2.boardOwn.aliveDecks.count > 0 && iterations <= 100 {
         iterations = 101
         break
     default:
-        print ("Зашли в default на итерации: \(iterations) \(cycleStatus), выстрел в \(hitPoint) с результатом \(hitResult). targetPoints: \(targetPoints). woundBoards: \(woundBoards)")
         break
     }
     
-    print ("Итерация: \(iterations) \(cycleStatus), выстрел в \(hitPoint) с результатом \(hitResult). targetPoints: \(targetPoints). woundBoards: \(woundBoards)")
+//    print ("Итерация: \(iterations) \(cycleStatus), выстрел в \(hitPoint) с результатом \(hitResult). targetPoints: \(targetPoints). woundBoards: \(woundBoards)")
 }
 
-print(player2.boardOwn.getAsString(), "in \(iterations) iterations")
+print(player2.boardOwn.getAsString())
 
 
 
