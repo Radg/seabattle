@@ -244,16 +244,23 @@ class ForeignBoard: GameBoard {
     
 }
 
+enum CycleStatus {                  // Тип итерации:
+    case NewShot                    // Совершаем новый выстрел
+    case FinishNoOrientation        // Добиваем, но не знаем ориентации корабля
+    case Finish                     // Добиваем, зная ориентацию корабля
+}
+
 class Player {
-    var name: String
-    var boardOwn: OwnBoard
-    var boardForeign: ForeignBoard
+    var name: String                        // Имя игрока
+    var boardOwn: OwnBoard                  // Собственноая доска игрока
+    var boardForeign: ForeignBoard          // Игра противника
+    var cycleStatus = CycleStatus.NewShot   // Перед началом игры статус хода игры - "Новый выстрел"
     
     init(name: String) {
         self.name = name
         self.boardOwn = OwnBoard()
-        boardOwn.generateShips()
-        boardForeign = ForeignBoard()
+        self.boardOwn.generateShips()
+        self.boardForeign = ForeignBoard()
     }
 }
 
@@ -262,13 +269,6 @@ class Player {
 let (player1, player2) = (Player(name: "Player1"), Player(name: "Player2"))
 // Сначала надо написать процедуру атаки игрока player1 на player2, без переключения хода
 
-enum CycleStatus {                  // Тип итерации:
-    case NewShot                    // Совершаем новый выстрел
-    case FinishNoOrientation        // Добиваем, но не знаем ориентации корабля
-    case Finish                     // Добиваем, зная ориентацию корабля
-}
-
-var cycleStatus = CycleStatus.NewShot
 var targetPoints = [Point2D]()       // Массив прилежащих (к раненой) клеток куда мы планируем далее стрелять, не более 4х элементов
 var woundBoards = [Point2D]()        // Массив стреляных точек
 var iterations: Int = 0
@@ -281,28 +281,28 @@ while player2.boardOwn.aliveDecks.count > 0 {
     
     switch targetPoints.count { // Устанавливаем cycleStatus в зависимости от кол-ва элементов массива targetPoints
     case 0:
-        cycleStatus = .NewShot
+        player1.cycleStatus = .NewShot
         hitPoint = player1.boardForeign.getRandomUnknownCell()
     case 1:
-        cycleStatus = .Finish
+        player1.cycleStatus = .Finish
         hitPoint = targetPoints[0]
     default:
-        cycleStatus = .FinishNoOrientation
+        player1.cycleStatus = .FinishNoOrientation
         hitPoint = targetPoints.randomElement()!
     }
     
     let hitResult = player2.boardOwn.hit(point: hitPoint, playerEnemy: player1)
     switch hitResult { // Стреляем и анализируем результат
-    case .Miss where cycleStatus == .FinishNoOrientation || cycleStatus == .Finish: // На предыдущем цикле попали, в этом - промахнулись. Нужно убрать стреляную точку из массива прилежащих:
+    case .Miss where player1.cycleStatus == .FinishNoOrientation || player1.cycleStatus == .Finish: // На предыдущем цикле попали, в этом - промахнулись. Нужно убрать стреляную точку из массива прилежащих:
         if let index = targetPoints.index(of: hitPoint) { targetPoints.remove(at: index) } else { print("Ошибка удаления точки из массива прилежащих") }
-    case .Wound where cycleStatus == .NewShot:
+    case .Wound where player1.cycleStatus == .NewShot:
         woundBoards.append(hitPoint)
         // Тут нужно формировать массив точек, по которым стрелять в следующих итерациях, исключая стрелянные / дохлые и т.п. Массив формируется из доски player1.boardForeign
         if hitPoint.col - 1 > 0  && (player1.boardForeign.board[hitPoint.col - 1][hitPoint.row] == 0) { targetPoints.append(Point2D(col: hitPoint.col - 1, row: hitPoint.row)) } // Добавляем левую точку
         if hitPoint.col + 1 < 11 && (player1.boardForeign.board[hitPoint.col + 1][hitPoint.row] == 0) { targetPoints.append(Point2D(col: hitPoint.col + 1, row: hitPoint.row)) } // Добавляем правую точку
         if hitPoint.row - 1 > 0  && (player1.boardForeign.board[hitPoint.col][hitPoint.row - 1] == 0) { targetPoints.append(Point2D(col: hitPoint.col, row: hitPoint.row - 1)) } // Добавляем верхнюю точку
         if hitPoint.row + 1 > 0  && (player1.boardForeign.board[hitPoint.col][hitPoint.row + 1] == 0) { targetPoints.append(Point2D(col: hitPoint.col, row: hitPoint.row + 1)) } // Добавляем нижнюю точку
-    case .Wound where cycleStatus == .FinishNoOrientation:
+    case .Wound where player1.cycleStatus == .FinishNoOrientation:
         woundBoards.append(hitPoint)
         targetPoints.removeAll()
         let (minRow, maxRow) = (woundBoards.sorted(by: {$0.row < $1.row})[0].row, woundBoards.sorted(by: {$0.row > $1.row})[0].row)
@@ -318,7 +318,7 @@ while player2.boardOwn.aliveDecks.count > 0 {
             // Нужно взять максимальный по col и от него +1
             if player1.boardForeign.board[maxCol + 1][woundBoards.first!.row] == 0 { targetPoints.append(Point2D(col: maxCol + 1, row: woundBoards.first!.row)) }
         }
-    case .Wound where cycleStatus == .Finish:
+    case .Wound where player1.cycleStatus == .Finish:
         woundBoards.append(hitPoint)
         // 1. добавить следующую точку по направлению выстрела:
         if woundBoards.first?.col == hitPoint.col {          // Корабль вертикально
@@ -348,36 +348,3 @@ while player2.boardOwn.aliveDecks.count > 0 {
 }
 
 print(player2.boardOwn.getAsString())
-
-
-
-
-//brd.generateShips()
-//print(brd.getAsString())
-//
-//while brd.aliveDecks.count > 0 { // Убить все сгенерированные корабли методом рандомной стрельбы по известным палубам из словаря
-//    brd.hit(point: brd.getRandomAliveDeck())
-//}
-//
-//print(brd.getAsString())
-
-//while brd.aliveDecks.count > 0 { // Стрелять случайно по всем клеткам подряд
-//    let randomPoint = Point2D(col: Int.random(in: 1 ... 10), row: Int.random(in: 1 ... 10))
-//    brd.hit(point: randomPoint)
-//}
-
-//let randomPoint = brd.getRandomAliveDeck()
-//brd.hitNew(col: randomPoint.col, row: randomPoint.row)
-
-//while brd.aliveDecks.count > 0 { // Убить все сгенерированные корабли методом рандомной стрельбы по известным палубам из словаря
-//    let randomPoint = brd.getRandomAliveDeck()
-//    print(randomPoint.col, randomPoint.row, brd.hit(col: randomPoint.col, row: randomPoint.row))
-//}
-//
-
-
-
-//for (point, value) in brd.aliveDecks {
-//    print("Column: \(point.col), Row: \(point.row), Value: \(value)")
-//}
-//print(brd.aliveDecks.count)
