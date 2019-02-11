@@ -274,7 +274,7 @@ var woundBoards = [Point2D]()        // Массив стреляных точе
 var iterations: Int = 0
 
 print(player2.boardOwn.getAsString())
-
+// 
 while player2.boardOwn.aliveDecks.count > 0 {
     
     var hitPoint = Point2D()
