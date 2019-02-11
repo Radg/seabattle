@@ -104,10 +104,10 @@ class GameBoard {
 
 class OwnBoard: GameBoard {
 
-    var aliveDecks = [Point2D : Int]() // Сюда будут складываться координаты сгенерированных палуб в качестве ключей и
+    var aliveDecks = [Point2D : Int]() // Сюда будут складываться координаты сгенерированных палуб
     
-    func isFit(col: Int, row: Int, size: Int, isHorisontal: Bool) -> Bool {
-        // Влезет ли корабль в заданную координату
+    func isFit(col: Int, row: Int, size: Int, isHorisontal: Bool) -> Bool { // Влезет ли корабль в заданную координату
+        
         if row > boardSize || row < 1 || col > boardSize || col < 1 || isHorisontal && (col + size - 1 > boardSize) || !isHorisontal && (row + size - 1 > boardSize) {
             return false
         }
@@ -307,19 +307,16 @@ class Player {
 
 let (player1, player2) = (Player(name: "Player1"), Player(name: "Player2"))
 
-//let playerActive = [player1, player2].randomElement() // Игрок, делающий первый ход, выбирается с помощью жребия
-let playerActive = player1
-let playerPassive = player2
+var (playerActive, playerPassive) = (player1, player2)
 
-var iterations: Int = 0
+print("\(player1.name) initial board is:\n", player1.gameBoardOwn.getAsString())
+print("\(player2.name) initial board is:\n", player2.gameBoardOwn.getAsString())
 
-print(player2.gameBoardOwn.getAsString())
-
-while playerPassive.gameBoardOwn.aliveDecks.count > 0 {
+while playerActive.gameBoardOwn.aliveDecks.count > 0 && playerPassive.gameBoardOwn.aliveDecks.count > 0 {       // Игровой цикл заканчивается как только у одного из игроков закончатся "живые" палубы
     
     var hitPoint = Point2D()
     
-    switch playerActive.targetPoints.count { // Устанавливаем cycleStatus в зависимости от кол-ва элементов массива targetPoints
+    switch playerActive.targetPoints.count {                                                                    // Устанавливаем cycleStatus в зависимости от кол-ва элементов массива targetPoints
     case 0:
         playerActive.cycleStatus = .NewShot
         hitPoint = playerActive.gameBoardForeign.getRandomUnknownCell()
@@ -331,26 +328,29 @@ while playerPassive.gameBoardOwn.aliveDecks.count > 0 {
         hitPoint = playerActive.targetPoints.randomElement()!
     }
     
-    let hitResult = playerPassive.gameBoardOwn.hit(point: hitPoint, playerEnemy: player1)
-    switch hitResult { // Стреляем и анализируем результат
-    case .Miss where playerActive.cycleStatus == .FinishNoOrientation || playerActive.cycleStatus == .Finish: // На предыдущем цикле попали, в этом - промахнулись. Нужно убрать стреляную точку из массива прилежащих:
+    let hitResult = playerPassive.gameBoardOwn.hit(point: hitPoint, playerEnemy: playerActive)
+    switch hitResult {                                                                                          // Стреляем и анализируем результат
+    case .Miss where playerActive.cycleStatus == .FinishNoOrientation || playerActive.cycleStatus == .Finish:   // На предыдущем цикле попали, в этом - промахнулись. Нужно убрать стреляную точку из массива прилежащих:
         if let index = playerActive.targetPoints.index(of: hitPoint) { playerActive.targetPoints.remove(at: index) } else { print("Ошибка удаления точки из массива прилежащих") }
-    case .Wound:
-        playerActive.woundBoards.append(hitPoint)
-        playerActive.formTargetPoints(hitPoint: hitPoint)
-    case .Dead:
-        playerActive.targetPoints.removeAll()
-        playerActive.woundBoards.removeAll()
+        swap(&playerActive, &playerPassive)
+    case .Miss:
+        swap(&playerActive, &playerPassive)
+    case .Wound:                                                                                                // Ранили палубу противника, нужно:
+        playerActive.woundBoards.append(hitPoint)                                                                   // Добавить палубу в массив раненых
+        playerActive.formTargetPoints(hitPoint: hitPoint)                                                           // Сформировать массив точек, по которым стрелять далее
+    case .Dead:                                                                                                 // Убили корабль противника, нужно:
+        playerActive.targetPoints.removeAll()                                                                       // Очистить массив точек, по которым стрелять далее
+        playerActive.woundBoards.removeAll()                                                                        // Очистить массив раненых палуб
     case .AlreadyShooted, .Unknown:
-        print("Ошибка при стрельбе в игрока \(playerPassive.name) в позицию \(hitPoint) на шаге \(iterations) со статусом \(hitResult)")
-        print("woundBoards: \(playerActive.woundBoards)")
-        iterations = 101
-        break
-    default:
         break
     }
-    
-//    print ("Итерация: \(iterations) \(cycleStatus), выстрел в \(hitPoint) с результатом \(hitResult). targetPoints: \(targetPoints). woundBoards: \(woundBoards)")
 }
 
-print(playerPassive.gameBoardOwn.getAsString())
+if player1.gameBoardOwn.aliveDecks.count > 0 {
+    print("\(player1.name) won!")
+} else {
+    print("\(player2.name) won!")
+}
+print("\(player1.name) result board is:\n", player1.gameBoardOwn.getAsString())
+print("\(player2.name) result board is:\n", player2.gameBoardOwn.getAsString())
+
