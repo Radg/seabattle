@@ -274,7 +274,7 @@ var woundBoards = [Point2D]()        // Массив стреляных точе
 var iterations: Int = 0
 
 print(player2.boardOwn.getAsString())
-// 
+//
 while player2.boardOwn.aliveDecks.count > 0 {
     
     var hitPoint = Point2D()
@@ -305,10 +305,8 @@ while player2.boardOwn.aliveDecks.count > 0 {
     case .Wound where cycleStatus == .FinishNoOrientation:
         woundBoards.append(hitPoint)
         targetPoints.removeAll()
-        let minRow = woundBoards.sorted(by: {$0.row < $1.row})[0].row
-        let maxRow = woundBoards.sorted(by: {$0.row > $1.row})[0].row
-        let minCol = woundBoards.sorted(by: {$0.col < $1.col})[0].col
-        let maxCol = woundBoards.sorted(by: {$0.col > $1.col})[0].col
+        let (minRow, maxRow) = (woundBoards.sorted(by: {$0.row < $1.row})[0].row, woundBoards.sorted(by: {$0.row > $1.row})[0].row)
+        let (minCol, maxCol) = (woundBoards.sorted(by: {$0.col < $1.col})[0].col, woundBoards.sorted(by: {$0.col > $1.col})[0].col)
         if minCol == maxCol {                               // Корабль вертикальный
             // Нужно взять минимальный по row и от него -1
             if player1.boardForeign.board[woundBoards.first!.col][minRow - 1] == 0 { targetPoints.append(Point2D(col: woundBoards.first!.col, row: minRow - 1)) }
@@ -324,13 +322,11 @@ while player2.boardOwn.aliveDecks.count > 0 {
         woundBoards.append(hitPoint)
         // 1. добавить следующую точку по направлению выстрела:
         if woundBoards.first?.col == hitPoint.col {          // Корабль вертикально
-            let minRow = woundBoards.sorted(by: {$0.row < $1.row})[0].row
-            let maxRow = woundBoards.sorted(by: {$0.row > $1.row})[0].row
+            let (minRow, maxRow) = (woundBoards.sorted(by: {$0.row < $1.row})[0].row, woundBoards.sorted(by: {$0.row > $1.row})[0].row)
             if minRow - 1 >  0 && player1.boardForeign.board[hitPoint.col][minRow - 1] == 0 { targetPoints.append(Point2D(col: hitPoint.col, row: minRow - 1)) }
             if maxRow + 1 < 11 && player1.boardForeign.board[hitPoint.col][maxRow + 1] == 0 { targetPoints.append(Point2D(col: hitPoint.col, row: maxRow + 1)) }
         } else {                                            // Корабль горизонтально
-            let minCol = woundBoards.sorted(by: {$0.col < $1.col})[0].col
-            let maxCol = woundBoards.sorted(by: {$0.col > $1.col})[0].col
+            let (minCol, maxCol) = (woundBoards.sorted(by: {$0.col < $1.col})[0].col, woundBoards.sorted(by: {$0.col > $1.col})[0].col)
             if minCol - 1 >  0 && player1.boardForeign.board[minCol - 1][hitPoint.row] == 0 { targetPoints.append(Point2D(col: minCol - 1, row: hitPoint.row)) }
             if maxCol + 1 < 11 && player1.boardForeign.board[maxCol + 1][hitPoint.row] == 0 { targetPoints.append(Point2D(col: maxCol + 1, row: hitPoint.row)) }
         }
